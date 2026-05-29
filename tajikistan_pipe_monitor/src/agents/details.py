@@ -1,0 +1,27 @@
+import os
+import yaml
+from crewai import Agent, LLM
+from crewai_tools import ScrapeWebsiteTool
+from src.tools.web_scraper import WebScraperTool
+
+def create_details_agent(llm: LLM) -> Agent:
+    config_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "config",
+        "agents.yaml"
+    )
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)["details_agent"]
+        
+    return Agent(
+        role=config["role"],
+        goal=config["goal"],
+        backstory=config["backstory"],
+        verbose=config.get("verbose", True),
+        max_iter=config.get("max_iter", 8),
+        llm=llm,
+        tools=[
+            ScrapeWebsiteTool(),
+            WebScraperTool(),
+        ],
+    )
