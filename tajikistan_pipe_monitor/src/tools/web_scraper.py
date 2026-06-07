@@ -33,8 +33,6 @@ def pre_filter(text: str) -> tuple[bool, str]:
     if any(h in t for h in water_hints):
         return True, "general_water_hint"
     return False, "no_match"
-
-
 class WebScraperTool(BaseTool):
     name: str = "Web Scraper"
     description: str = (
@@ -45,14 +43,14 @@ class WebScraperTool(BaseTool):
 
     def _run(self, url: str) -> str:
         import os
-        from firecrawl import FirecrawlApp
+        from firecrawl import Firecrawl
         api_key = os.environ.get("FIRECRAWL_API_KEY")
         
         if api_key and "your_" not in api_key:
             try:
-                app = FirecrawlApp(api_key=api_key)
-                result = app.scrape_url(url, params={'formats': ['markdown']})
-                text = result.get('markdown', '')
+                app = Firecrawl(api_key=api_key)
+                result = app.scrape(url, formats=['markdown'])
+                text = getattr(result, 'markdown', '') or ''
                 
                 if text:
                     is_relevant, reason = pre_filter(text)
