@@ -5,26 +5,25 @@ from duckduckgo_search import DDGS
 
 logger = logging.getLogger(__name__)
 
+
 class DuckDuckGoSearchTool(BaseTool):
     name: str = "DuckDuckGo Search"
     description: str = (
-        "Выполняет поиск в интернете с помощью DuckDuckGo. "
-        "Полезен для поиска новостей, тендеров, сайтов организаций и контактной информации. "
-        "Параметр: query (строка поискового запроса). Возвращает: JSON-список результатов (заголовок, ссылка, текст)."
+        "Поиск в интернете через DuckDuckGo. "
+        "Параметр: query (строка). Возвращает: JSON-список результатов (title, link, snippet)."
     )
 
     def _run(self, query: str) -> str:
         try:
             with DDGS() as ddgs:
                 results = []
-                # Use text() to fetch web results
-                for r in ddgs.text(query, max_results=10):
+                for r in ddgs.text(query, max_results=5):
                     results.append({
                         "title": r.get("title", ""),
                         "link": r.get("href", ""),
-                        "snippet": r.get("body", ""),
+                        "snippet": r.get("body", "")[:200],
                     })
                 return json.dumps(results, ensure_ascii=False)
         except Exception as e:
-            logger.error(f"Error in DuckDuckGoSearchTool: {str(e)}")
+            logger.error("DuckDuckGoSearchTool error: %s", e)
             return f"Ошибка поиска: {str(e)}"
