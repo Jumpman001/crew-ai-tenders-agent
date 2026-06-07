@@ -25,16 +25,17 @@ EXCLUDE_KEYWORDS = [
 ]
 
 SOURCES = [
-    ("WB_API",   "https://search.worldbank.org/api/v2/procnotices?format=json&project_ctry_code=TJ&rows=50&status=active"),
-    ("ADB_RSS",  "https://www.adb.org/rss/projects/tenders?country=TAJ"),
-    ("DGM_RSS",  "https://www.dgmarket.com/tenders/rss.do?countryId=TJ"),
-    ("EFSD",     "https://efsd.org/en/purchases/"),
-    ("WSIP1",    "https://wsip-1.tj/"),
-    ("MEWR",     "https://www.mewr.tj/"),
-    ("TENDERS",  "https://tenders.tj/"),
-    ("ISDB",     "https://www.isdb.org/project-procurement/tenders"),
-    ("UN_TJ",    "https://tajikistan.un.org/en/jobs"),
-    ("ISDB_BGT", "https://bgate.isdb.org/CPP/EN/SearchTender.aspx"),
+    ("WB_API",     "https://search.worldbank.org/api/v2/procnotices?format=json&project_ctry_code=TJ&rows=50&status=active"),
+    ("ADB_RSS",    "https://www.adb.org/rss/projects/tenders?country=TAJ"),
+    ("DGM_RSS",    "https://www.dgmarket.com/tenders/rss.do?countryId=TJ"),
+    ("EFSD",       "https://efsd.org/en/purchases/"),
+    ("WSIP1",      "https://wsip-1.tj/"),
+    ("MEWR",       "https://www.mewr.tj/"),
+    ("TENDERS",    "https://tenders.tj/"),
+    ("ISDB",       "https://www.isdb.org/project-procurement/tenders"),
+    ("UN_TJ",      "https://tajikistan.un.org/en/jobs"),
+    ("ISDB_BGT",   "https://bgate.isdb.org/CPP/EN/SearchTender.aspx"),
+    ("EBRD_ECEPP", "https://ecepp.ebrd.com/delta/notice/noticeSearch.html"),
 ]
 
 _UA = UserAgent(fallback="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -153,6 +154,66 @@ def _fetch_html(name: str, url: str) -> list[dict]:
         logger.warning("HTML %s (%s): %s", name, url, ex)
         return []
 
+def _fetch_via_firecrawl(name: str, url: str) -> list[dict]:
+    import os
+    api_key = os.environ.get("FIRECRAWL_API_KEY")
+    if not api_key or "your_" not in api_key:
+        logger.warning("Firecrawl API key not set, skipping %s (%s)", name, url)
+        return []
+    
+    try:
+        from firecrawl import Firecrawl
+        app = Firecrawl(api_key=api_key)
+        
+        result = app.scrape(url, formats=['markdown'])
+        text = getattr(result, 'markdown', '') or ''
+        
+        if not text:
+            return []
+            
+        import re
+        links = re.findall(r'\[([^\]]+)\]\((https?://[^\)]+|/[^\)]+)\)', text)
+        
+        base = urlparse(url)
+        candidates = []
+        for link_text, href in links:
+            link_text = link_text.strip()
+            if len(link_text) < 10:
+                continue
+            if not _is_relevant(link_text + " " + href):
+                continue
+            if href.startswith("http"):
+                full_url = href
+            elif href.startswith("/"):
+                full_url = f"{base.scheme}://{base.netloc}{href}"
+            else:
+                continue
+            candidates.append({
+                "title": link_text[:200],
+                "url": full_url,
+                "summary": "",
+                "date": "",
+                "source": name,
+                "donor": name,
+            })
+        
+        if not candidates:
+            if _is_relevant(text):
+                title_match = re.search(r'^#\s+(.+)$', text, re.MULTILINE)
+                page_title = title_match.group(1).strip() if title_match else name
+                candidates.append({
+                    "title": page_title[:200],
+                    "url": url,
+                    "summary": text[:300],
+                    "date": "",
+                    "source": name,
+                    "donor": name,
+                })
+        return candidates[:6]
+    except Exception as ex:
+        logger.warning("Firecrawl %s (%s): %s", name, url, ex)
+        return []
+
 
 def fetch_all_sources(max_candidates: int = 20) -> list[dict]:
     """Обходит все источники параллельно. Возвращает список кандидатов."""
@@ -163,6 +224,10 @@ def fetch_all_sources(max_candidates: int = 20) -> list[dict]:
             return _fetch_rss(name, url)
         if "worldbank.org/api" in url:
             return _fetch_wb_api(url)
+        if "bgate.isdb.org" in url or "ecepp.ebrd.com" in url:
+            res = _fetch_via_firecrawl(name, url)
+            if res:
+                return res
         return _fetch_html(name, url)
 
     with ThreadPoolExecutor(max_workers=10) as pool:
