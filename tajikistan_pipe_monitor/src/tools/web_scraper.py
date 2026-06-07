@@ -43,11 +43,11 @@ class WebScraperTool(BaseTool):
 
     def _run(self, url: str) -> str:
         import os
-        from firecrawl import Firecrawl
         api_key = os.environ.get("FIRECRAWL_API_KEY")
         
         if api_key and "your_" not in api_key:
             try:
+                from firecrawl import Firecrawl
                 app = Firecrawl(api_key=api_key)
                 result = app.scrape(url, formats=['markdown'])
                 text = getattr(result, 'markdown', '') or ''
